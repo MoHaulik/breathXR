@@ -43,6 +43,16 @@
             background: rgba(0, 0, 0, 0.5);
             border-radius: 10px;
         }
+
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -52,9 +62,12 @@
         Inhale as it expands<br>
         Exhale as it contracts
     </div>
+    <div id="debug">Loading...</div>
 
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script>
+        const debug = document.getElementById('debug');
+
         // Register custom component for breathing animation
         AFRAME.registerComponent('breathing', {
             init: function() {
@@ -69,7 +82,7 @@
             },
             tick: function(time, delta) {
                 this.time += delta / 1000;
-                const breathCycle = 8; // 8-second cycle
+                const breathCycle = 8;
                 const scale = 0.3 + Math.sin(this.time * Math.PI * 2 / breathCycle) * 0.2;
                 this.el.setAttribute('scale', `${scale} ${scale} ${scale}`);
             }
@@ -77,14 +90,16 @@
 
         // Start AR session
         document.getElementById('startButton').addEventListener('click', async function() {
+            debug.textContent = 'Starting AR session...';
+            
             // Create A-Frame scene
             const scene = document.createElement('a-scene');
             scene.setAttribute('embedded', '');
             scene.setAttribute('xr-mode-ui', 'enabled: false');
-            scene.setAttribute('webxr', 'requiredFeatures: local-floor; optionalFeatures: bounded-floor;');
+            scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: local-floor;');
             scene.setAttribute('renderer', 'colorManagement: true;');
 
-            // Create breathing orb (positioned 2m in front of user)
+            // Create breathing orb (2m in front of user)
             const orb = document.createElement('a-sphere');
             orb.setAttribute('radius', '0.3');
             orb.setAttribute('position', '0 1.5 -2'); // 1.5m up, 2m forward
@@ -111,29 +126,50 @@
 
             // Request immersive AR session
             try {
+                debug.textContent = 'Requesting XR session...';
                 const session = await navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['local-floor'],
-                    optionalFeatures: ['bounded-floor']
+                    requiredFeatures: ['local'], // Minimal requirement: user-centric space
+                    optionalFeatures: ['local-floor'] // Optional floor-level reference
                 });
-                scene.setAttribute('webxr', 'session: ' + session);
+
+                debug.textContent = 'Session started, initializing scene...';
+                scene.xrSession = session;
+
+                // Handle session start
+                session.addEventListener('end', () => {
+                    debug.textContent = 'AR session ended';
+                    scene.remove();
+                    document.getElementById('startButton').style.display = 'block';
+                });
+
+                // Wait for scene to enter AR mode
+                scene.addEventListener('enter-vr', () => {
+                    debug.textContent = 'AR mode active';
+                });
             } catch (err) {
+                debug.textContent = `Error: ${err.message}`;
                 console.error('AR session error:', err);
-                alert('Failed to start AR session. Please ensure AR is supported and permissions are granted.');
+                alert(`Failed to start AR: ${err.message}`);
             }
         });
 
         // Check WebXR support on load
         window.onload = async () => {
             if (!navigator.xr) {
+                debug.textContent = 'WebXR not supported';
                 alert('WebXR not supported by your browser');
                 document.getElementById('startButton').disabled = true;
                 return;
             }
 
+            debug.textContent = 'Checking AR support...';
             const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
             if (!isSupported) {
+                debug.textContent = 'Immersive AR not supported';
                 alert('Immersive AR not supported on this device');
                 document.getElementById('startButton').disabled = true;
+            } else {
+                debug.textContent = 'Ready - Click to start';
             }
         };
     </script>
