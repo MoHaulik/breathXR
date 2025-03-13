@@ -52,6 +52,8 @@
             background: rgba(0, 0, 0, 0.7);
             padding: 10px;
             z-index: 10;
+            max-width: 80%;
+            word-wrap: break-word;
         }
     </style>
 </head>
@@ -68,7 +70,7 @@
     <script>
         const debug = document.getElementById('debug');
 
-        // Register custom component for breathing animation
+        // Register breathing component
         AFRAME.registerComponent('breathing', {
             init: function() {
                 this.time = 0;
@@ -91,21 +93,21 @@
         // Start AR session
         document.getElementById('startButton').addEventListener('click', async function() {
             debug.textContent = 'Starting AR session...';
-            
+
             // Create A-Frame scene
             const scene = document.createElement('a-scene');
             scene.setAttribute('embedded', '');
             scene.setAttribute('xr-mode-ui', 'enabled: false');
-            scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: local-floor;');
+            scene.setAttribute('webxr', 'requiredFeatures: local;');
             scene.setAttribute('renderer', 'colorManagement: true;');
 
-            // Create breathing orb (2m in front of user)
+            // Create breathing orb
             const orb = document.createElement('a-sphere');
             orb.setAttribute('radius', '0.3');
-            orb.setAttribute('position', '0 1.5 -2'); // 1.5m up, 2m forward
+            orb.setAttribute('position', '0 1.5 -1'); // Closer: 1m forward
             orb.setAttribute('breathing', '');
 
-            // Create subtle particle effects
+            // Create particles
             const particles = document.createElement('a-entity');
             particles.setAttribute('particle-system', {
                 preset: 'dust',
@@ -116,48 +118,62 @@
                 maxAge: 2
             }.toString());
 
-            // Assemble scene
             scene.appendChild(orb);
             scene.appendChild(particles);
             document.body.appendChild(scene);
 
-            // Hide button
             this.style.display = 'none';
 
-            // Request immersive AR session
             try {
                 debug.textContent = 'Requesting XR session...';
                 const session = await navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['local'], // Minimal requirement: user-centric space
-                    optionalFeatures: ['local-floor'] // Optional floor-level reference
+                    requiredFeatures: ['local']
                 });
 
                 debug.textContent = 'Session started, initializing scene...';
-                scene.xrSession = session;
 
-                // Handle session start
+                // Manually set up the XR session with the renderer
+                const canvas = scene.querySelector('canvas') || document.createElement('canvas');
+                if (!scene.querySelector('canvas')) document.body.appendChild(canvas);
+
+                const gl = canvas.getContext('webgl2', { xrCompatible: true });
+                if (!gl) throw new Error('WebGL2 not supported');
+
+                session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
+                scene.renderer.xr.setSession(session);
+
+                // Force AR mode
+                scene.enterVR();
+
                 session.addEventListener('end', () => {
                     debug.textContent = 'AR session ended';
                     scene.remove();
                     document.getElementById('startButton').style.display = 'block';
                 });
 
-                // Wait for scene to enter AR mode
+                scene.addEventListener('loaded', () => {
+                    debug.textContent = 'Scene loaded';
+                });
+
                 scene.addEventListener('enter-vr', () => {
                     debug.textContent = 'AR mode active';
                 });
+
+                scene.addEventListener('exit-vr', () => {
+                    debug.textContent = 'Exited AR mode';
+                });
             } catch (err) {
                 debug.textContent = `Error: ${err.message}`;
-                console.error('AR session error:', err);
+                console.error('AR error:', err);
                 alert(`Failed to start AR: ${err.message}`);
             }
         });
 
-        // Check WebXR support on load
+        // Check WebXR support
         window.onload = async () => {
             if (!navigator.xr) {
                 debug.textContent = 'WebXR not supported';
-                alert('WebXR not supported by your browser');
+                alert('WebXR not supported');
                 document.getElementById('startButton').disabled = true;
                 return;
             }
@@ -166,7 +182,7 @@
             const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
             if (!isSupported) {
                 debug.textContent = 'Immersive AR not supported';
-                alert('Immersive AR not supported on this device');
+                alert('Immersive AR not supported');
                 document.getElementById('startButton').disabled = true;
             } else {
                 debug.textContent = 'Ready - Click to start';
