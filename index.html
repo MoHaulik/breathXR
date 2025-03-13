@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Breathing Exercise - Meta Quest 3</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+            font-family: Arial, sans-serif;
+        }
+        
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #ffffff;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        #startButton:hover {
+            background: #f0f0f0;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            z-index: 10;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <button id="startButton">Start AR Breathing</button>
+    <div id="instructions">
+        Follow the orb's movement:<br>
+        Inhale as it expands<br>
+        Exhale as it contracts
+    </div>
+
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script>
+        // Register custom component for breathing animation
+        AFRAME.registerComponent('breathing', {
+            init: function() {
+                this.time = 0;
+                this.el.setAttribute('material', {
+                    color: '#87CEEB',
+                    emissive: '#87CEEB',
+                    emissiveIntensity: 0.6,
+                    transparent: true,
+                    opacity: 0.8
+                });
+            },
+            tick: function(time, delta) {
+                this.time += delta / 1000;
+                const breathCycle = 8; // 8-second cycle
+                const scale = 0.3 + Math.sin(this.time * Math.PI * 2 / breathCycle) * 0.2;
+                this.el.setAttribute('scale', `${scale} ${scale} ${scale}`);
+            }
+        });
+
+        // Start AR session
+        document.getElementById('startButton').addEventListener('click', async function() {
+            // Create A-Frame scene
+            const scene = document.createElement('a-scene');
+            scene.setAttribute('embedded', '');
+            scene.setAttribute('xr-mode-ui', 'enabled: false');
+            scene.setAttribute('webxr', 'requiredFeatures: local-floor; optionalFeatures: bounded-floor;');
+            scene.setAttribute('renderer', 'colorManagement: true;');
+
+            // Create breathing orb (positioned 2m in front of user)
+            const orb = document.createElement('a-sphere');
+            orb.setAttribute('radius', '0.3');
+            orb.setAttribute('position', '0 1.5 -2'); // 1.5m up, 2m forward
+            orb.setAttribute('breathing', '');
+
+            // Create subtle particle effects
+            const particles = document.createElement('a-entity');
+            particles.setAttribute('particle-system', {
+                preset: 'dust',
+                color: '#87CEEB',
+                particleCount: 50,
+                size: 0.05,
+                velocityValue: '0 0.1 0',
+                maxAge: 2
+            }.toString());
+
+            // Assemble scene
+            scene.appendChild(orb);
+            scene.appendChild(particles);
+            document.body.appendChild(scene);
+
+            // Hide button
+            this.style.display = 'none';
+
+            // Request immersive AR session
+            try {
+                const session = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local-floor'],
+                    optionalFeatures: ['bounded-floor']
+                });
+                scene.setAttribute('webxr', 'session: ' + session);
+            } catch (err) {
+                console.error('AR session error:', err);
+                alert('Failed to start AR session. Please ensure AR is supported and permissions are granted.');
+            }
+        });
+
+        // Check WebXR support on load
+        window.onload = async () => {
+            if (!navigator.xr) {
+                alert('WebXR not supported by your browser');
+                document.getElementById('startButton').disabled = true;
+                return;
+            }
+
+            const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+            if (!isSupported) {
+                alert('Immersive AR not supported on this device');
+                document.getElementById('startButton').disabled = true;
+            }
+        };
+    </script>
+</body>
+</html>
